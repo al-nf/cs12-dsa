@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <bool.h>
+#include <stdbool.h>
 #include "set.h"
 #include <assert.h>
 
@@ -9,7 +10,7 @@ typedef struct set
 	int n; // count
 	int m; // max length 
 	char **data;
-	bool *flags; // FALSE: deleted | TRUE: filled | NULL: empty
+	char *flags;
 } SET;
 
 SET *createSet( int maxElts )
@@ -20,26 +21,75 @@ SET *createSet( int maxElts )
 	sp->n = 0;
 	sp->m = maxElts;
 	sp->data = malloc(sizeof(char*)*maxElts);
-	sp->flags = malloc(sizeof(bool*)*maxElts);
+	sp->flags = malloc(sizeof(char)*maxElts);
+	for (int i = 0; i < maxElts; i++)
+	{
+		sp->flags[i] = 'E';
+	}
 	assert(sp->data != NULL);
 	assert(sp->flags != NULL);
 
 	return sp;	
 }
+static unsigned strhash ( char *s )
+{
+	unsigned hash = 0;
+	while (*s != '\0')
+	{
+		hash = 31 * hash + *s ++;
+	}
+	return hash;
+}
 
-void destroySet ( SET *sp )
+
+
+static int search ( SET *sp, char *elt, bool *found )
 {
 	assert(sp != NULL);
-	for (int i = 0; i < sp->n; i++) // frees data
+
+	*found = false;
+	int idx = (strhash(elt)%(sp->m));
+	int home = idx; // home location
+	int firstdel = -1;
+
+	while (! *found)
 	{
-		free(sp->data[i]);
+		if (sp->flags[idx%(sp->m)] == 'F') // if flag filled
+		{
+			if ((strcmp(sp->data[idx%(sp->m)], elt))== 0) // if element is the same
+			{
+				*found = true;
+				return (idx%(sp->m));
+			}
+		}
+		if ((sp->flags[idx%(sp->m)]) == 'E') // if flag empty
+		{
+			return (idx%(sp->m));
+		}
+		if ((sp->flags[idx%(sp->m)]) == 'D') // if flag delete
+		{
+			firstdel = (idx%(sp->m));
+		}
+		if ((idx - home) >= (sp->m))
+		{
+			break;
+		}
+		++idx;
+	}
+	return firstdel;
+}
+
+void destroySet ( SET *sp ) 
+{
+	assert(sp != NULL);
+	for (int i = 0; i < (sp->m); i++) // frees data
+	{
+		if (sp->flags[i] != 'D')
+		{
+			free(sp->data[i]);
+		}
 	}
 	free(sp->data);
-
-	for (int i = 0; i < sp->n; i++) // frees flags
-	{
-		free(sp->flags[i]);
-	}
 	free(sp->flags);
 
 	free(sp); // frees set
@@ -53,64 +103,57 @@ int numElements ( SET *sp )
 
 void addElement ( SET *sp, char *elt )
 {
-	assert(sp != NULL && elt != NULL && ((sp->n) < (sp->m)));
-	int hidx = (strhash(elt))%(sp->m); // home index
-	for (int i = hidx; i < ((sp->m)+hidx); i++)
+	assert(sp != NULL);
+	bool found = false;
+	int idx = search(sp, elt, &found);
+	if (!found && idx != -1)
 	{
-		if ((flags[i%(sp->m)] == FALSE) || (flags[i%(sp->m)] == NULL))
-		{
-			data[i%(sp->m)] = strdup(elt);
-			*flags[i%(sp->m)] = TRUE;
-			break;
-		}
-	}
+		sp->data[idx] = strdup(elt);
+		sp->flags[idx] = 'F';
+		++(sp->n);
 
-	
+	}
 }
 
 void removeElement ( SET *sp, char *elt )
 {
-	assert(sp != NULL && elt != NULL && ((sp->n) > 0));
-	int hidx = (strhash(elt))%(sp->m); // home index
-	for (int i = hidx; i < ((sp->m)+hidx); i++)
+	assert(sp != NULL);
+	bool found = false;
+	int idx = search(sp, elt, &found);
+	if (found)
 	{
-		if ((flags[i%(sp->m)] == TRUE && (strcmp(elt, data[i%sp->m] == 0))))
-		{
-			data[i%(sp->m)] = NULL;
-			*flags[i%(sp->m)] = FALSE;
-			break;
-		}
+		free(sp->data[idx]);
+		sp->flags[idx] = 'D';
+		--(sp->n);
 	}
 }
-
 char *findElement ( SET *sp, char *elt )
 {
-	assert(sp != NULL && elt != NULL && ((sp->n) > 0) && ((sp->n) < (sp->m)));
-	int hidx = (strhash(elt))%(sp->m); // home index
-	for (int i = hidx; i < ((sp->m)+hidx); i++)
+	assert(sp != NULL);
+	bool found = false;
+	int idx = search(sp, elt, &found);
+	if (found)
 	{
-		if (strcmp(data[i%(sp->m)], elt) == 0)
-		{
-			return elt;
-		}
-		if ((flags[i%(sp->m)] == NULL))
-		{
-			return NULL; // element not in SET
-		}
+		return sp->data[idx];
 	}
+	return NULL;
 }
 
 char **getElements ( SET *sp )
 {
-	// writ ehtis later
-}
-
-unsigned strhash ( char *s )
-{
-	unsigned hash = 0;
-	while (*s != '\0')
-		hash = ++((31 * hash) + *s);
-	return hash;
+	assert(sp != NULL);
+	int j = 0; // second increment variable
+	char **strs = malloc(sizeof(char*)*(sp->n));
+	for (int i = 0; i < (sp->m); i++)
+	{
+		
+		if (sp->flags[i] == 'F')
+		{
+			strs[j] = sp->data[i];
+			++j;
+		}
+	}
+	return strs;
 }
 
 
